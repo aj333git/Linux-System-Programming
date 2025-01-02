@@ -18,6 +18,7 @@ int main()
     sleep(2);
     return 0;
 }
-
-//parent process..
-//child process ..
+/*
+parent process..
+child process ..
+*/

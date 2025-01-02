@@ -3,6 +3,7 @@
 
 int main()
 {
+    //pid_t is signed integer type, represents processid
     pid_t pid;
  //pid is process id for unique identifier
     pid = fork();

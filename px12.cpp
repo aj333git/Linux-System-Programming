@@ -1,4 +1,6 @@
-#include <stdio.h>
+//will write again, wrong one
+
+/*#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
@@ -38,7 +40,7 @@ int main() {
             printf("Parent: Child (PID = %d) exited with status %d.\n", terminated_pid, WEXITSTATUS(status));
         } else {
             printf("Parent: Child terminated abnormally.\n");
-        }
+        }*/
     }
 
     return 0;

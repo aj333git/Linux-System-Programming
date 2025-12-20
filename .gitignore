@@ -1,0 +1,11 @@
+# binaries
+signal_15
+
+# editor files
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+

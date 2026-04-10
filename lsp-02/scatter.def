@@ -1,0 +1,4 @@
+headers = scatter_lib.h
+compilerOpts = -I.
+libraryPaths = .
+libraries = scatter

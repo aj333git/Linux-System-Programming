@@ -1,0 +1,340 @@
+char *buf[] = {
+    "The term buccaneer comes from the word boucan.\n",
+    "A boucan is a wooden frame used for cooking meat.\n",
+    "Buccaneer is the West Indies name for a pirate.\n"
+};
+
+struct iovec iov[3];
+
+for (int i = 0; i < 3; i++) {
+    iov[i].iov_base = buf[i];
+    iov[i].iov_len  = strlen(buf[i]);
+}
+
+Here:
+
+iov[0] → first string
+iov[1] → second string
+iov[2] → third string
+
+So the “iovec vector of 3 buffers” just means an array of 3 separate strings ready to write.
+
+Normally, if you wanted to write these strings to a file with write(), you’d do:
+
+write(fd, buf[0], strlen(buf[0]));
+write(fd, buf[1], strlen(buf[1]));
+write(fd, buf[2], strlen(buf[2]));
+Three separate system calls → more overhead
+Each call could be interrupted or interleaved with another process
+
+With writev(fd, iov, 3):
+
+All 3 buffers are written in one single system call
+Atomic write: no other process can insert data between them
+Efficient: avoids multiple calls and copying
+
+3️⃣ Result in the file
+
+After writev():
+
+buccaneer.txt contents:
+
+The term buccaneer comes from the word boucan.
+A boucan is a wooden frame used for cooking meat.
+Buccaneer is the West Indies name for a pirate.
+The file contains all three segments in the exact order of your iovec array.
+They are not separate files or chunks — just concatenated in order, atomically.
+
+✅ So when I said:
+
+“C function created an iovec vector of 3 buffers and wrote them atomically using writev().”
+
+It means:
+
+You prepared three separate strings in memory (iovec vector).
+You wrote all three together in one call (writev).
+The file now contains all three strings in order, with no gaps or interleaving.
+
+Buffers in memory (the iovec vector)
+iovec[0] -> "The term buccaneer comes from the word boucan.\n"
+iovec[1] -> "A boucan is a wooden frame used for cooking meat.\n"
+iovec[2] -> "Buccaneer is the West Indies name for a pirate.\n"
+
+Think of memory like this:
+Memory: 
++-------------------------------+-------------------------------+-------------------------------+
+| Buffer 0                      | Buffer 1                      | Buffer 2                      |
+| "The term buccaneer..."       | "A boucan is a..."            | "Buccaneer is the..."         |
++-------------------------------+-------------------------------+-------------------------------+
+
+2️⃣ Writing to file with multiple write() calls (inefficient)
+write(fd, iov[0], len0) --> writes Buffer 0
+write(fd, iov[1], len1) --> writes Buffer 1
+write(fd, iov[2], len2) --> writes Buffer 2
+3 system calls
+Other processes could interleave between calls
+More overhead
+3️⃣ Writing to file with writev(fd, iov, 3) (atomic & efficient)
+writev(fd, iov, 3) --> writes all buffers in one call
+
+File content after writev:
+
++--------------------------------------------------------------------------------------------+
+| "The term buccaneer..." | "A boucan is a..." | "Buccaneer is the..."                       |
++--------------------------------------------------------------------------------------------+
+✅ Single system call writes all three buffers sequentially and atomically.
+
+Memory (3 buffers)            iovec array          writev(fd)
++-------------------+         +---------+          +-----------------------------+
+| Buffer 0          |  --->   | iov[0]  |          |                             |
+| Buffer 1          |  --->   | iov[1]  |  ---->  | File: "Buffer0Buffer1Buffer2"|
+| Buffer 2          |  --->   | iov[2]  |          |                             |
++-------------------+         +---------+          +-----------------------------+
+
+Left: your data in memory
+Middle: iovec structures describing the buffers
+Right: all buffers written to file in order
+
+| Field      | Purpose                                          |
+| ---------- | ------------------------------------------------ |
+| `iov_base` | Pointer to the **start of the buffer** in memory |
+| `iov_len`  | Length in **bytes** of the buffer to read/write  |
+
+iov_base
+Type: void* → generic pointer
+Meaning: start address of the buffer in memory
+Exampl
+
+iov_len
+Type: size_t → length in bytes
+Meaning: how many bytes to read/write from iov_base
+Example:
+
+When you call writev(), the kernel writes exactly iov_len bytes from the memory pointed to by iov_base.
+
+Function: writev()
+
+Prototype:
+
+ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
+fd → File descriptor (e.g., from open())
+iov → Pointer to an array of struct iovec (the buffers you want to write)
+iovcnt → Number of buffers in the array
+2️⃣ What it does
+
+writev() writes multiple buffers to a file (or socket) in a single system call:
+
+The kernel looks at each iov[i].iov_base and iov[i].iov_len
+Writes all bytes from all buffers sequentially to the file descriptor fd
+Returns the total number of bytes written
+This is more efficient than multiple write() calls, because:
+
+Only one system call
+Guarantees atomicity (no other process can write between buffers)
+
+4️⃣ Why we use ssize_t nr
+ssize_t nr;
+nr = writev(fd, iov, 3);
+printf("wrote %zd bytes\n", nr);
+Tracks how many bytes were actually written
+Useful for error checking or logging
+| Part  | Meaning                                        |
+| ----- | ---------------------------------------------- |
+| `fd`  | File descriptor to write to                    |
+| `iov` | Array of buffers (`iov_base + iov_len`)        |
+| `3`   | Number of buffers in `iov` array               |
+| `nr`  | Total bytes successfully written by `writev()` |
+
+1️⃣ Memory in C (buffers)
+Memory (inside scatter_lib.c):
+
++---------------------------+---------------------------+---------------------------+
+| Buffer 0                  | Buffer 1                  | Buffer 2                  |
+| "The term buccaneer..."   | "A boucan is a..."        | "Buccaneer is..."         |
++---------------------------+---------------------------+---------------------------+
+iov[0].iov_base --> points here
+iov[0].iov_len  --> length of Buffer 0
+iov[1].iov_base --> points here
+iov[1].iov_len  --> length of Buffer 1
+iov[2].iov_base --> points here
+iov[2].iov_len  --> length of Buffer 2
+
+2️⃣ writev() writes all buffers to file (atomic copy)
+writev(fd, iov, 3)
+        |
+        v
+Kernel copies memory → file system
+So this single line takes 3 buffers in memory and writes them all in order to a file (or socket) atomically.
+
+3️⃣ File on disk: buccaneer.txt
++---------------------------------------------------------------+
+| The term buccaneer comes from the word boucan.\n             |
+| A boucan is a wooden frame used for cooking meat.\n          |
+| Buccaneer is the West Indies name for a pirate.\n            |
++---------------------------------------------------------------+
+
+All three buffers are concatenated in order.
+Writing is atomic — no other process can interleave between buffers.
+
+File on disk --> F# reads it --> memory in F# program
+
+[F# Program] 
+   |
+   | calls
+   v
+[C Library in .so] 
+   |
+   | prepares buffers (iov_base + iov_len)
+   v
+[Memory in C] ----------------+
+                               |
+                               v
+                       writev(fd, iov, 3)
+                               |
+                               v
+[File on disk: buccaneer.txt] <----------------+
+                               |             |
+                               | read       |
+                               v             |
+                        [F# Memory]          |
+                        
+                        
+                        ✅ Summary of the flow
+F# calls the C shared library (.so) function.
+C prepares multiple buffers in memory.
+writev() writes all buffers in one system call to buccaneer.txt.
+The file now contains the concatenated buffers.
+Later, you can read the file back into F# memory.
+
+[ C Program Memory ]
+      |
+      v
+  call open("buccaneer.txt")
+      |
+      v
+[ Kernel ]
+      |
+      +--> Creates/opens "buccaneer.txt" on disk
+      |
+      +--> Sets up file descriptor table
+      |
+      v
+  returns fd = 3
+  
+  fd = 3 is just an integer handle for the kernel to know which file you are referring to.
+File exists on disk, currently empty (because of O_TRUNC).
+
+Memory (inside C process)
++-----------------------+-----------------------+-----------------------+
+| Buffer 0 string       | Buffer 1 string       | Buffer 2 string       |
++-----------------------+-----------------------+-----------------------+
+iov[0] -> points here
+iov[1] -> points here
+iov[2] -> points here
+
+Memory buffers (iov)            File on disk (buccaneer.txt)
++-----------------------+       +-------------------------------+
+| Buffer 0 string       |  -->  | Buffer 0 string               |
+| Buffer 1 string       |  -->  | Buffer 1 string               |
+| Buffer 2 string       |  -->  | Buffer 2 string               |
++-----------------------+       +-------------------------------+
+               ^
+               |
+           fd = 3 (file descriptor tells kernel which file)
+           
+           All buffers are written in one system call.
+nr will contain the total number of bytes written.
+
+[F# Program] 
+     |
+     | calls C function in .so
+     v
+[C Library in .so] 
+     |
+     | prepares iovec buffers in memory
+     v
+[Memory in C process]
+     |
+     | writev(fd, iov, 3)
+     v
+[Kernel] uses fd to find file
+     |
+     v
+[File on disk: buccaneer.txt] ← now contains all buffers
+
+✅ Key takeaways
+open() → gives fd → tells kernel which file to operate on.
+writev() → uses fd → copies all memory buffers (iov_base + iov_len) to the file.
+Memory buffers stay in your process; file now has the data.
+Later, you can read the file back into F# or C.
+
+3️⃣ How they work together
+
+Step-by-step:
+
+open() → ask kernel for a file descriptor → kernel sets up file structures → returns fd
+File on disk: buccaneer.txt (empty initially)
+Kernel bookkeeping: fd = 3
+writev(fd, iov, 3) → kernel copies your buffers from memory to the file on disk using the file descriptor fd
+Memory buffers: iov[0], iov[1], iov[2] 
+   | 
+   v
+File on disk (via fd=3): concatenated buffers
+Without open(), you don’t have a file descriptor, so writev() would fail — it doesn’t know where to write.
+Without writev(), open() alone doesn’t write anything — it just gives you access to the file.
+| Function   | Role                                          |
+| ---------- | --------------------------------------------- |
+| `open()`   | “Open or create the file” → returns fd        |
+| `writev()` | “Write memory buffers into the file” using fd |
+
+“Linux implements readv() and writev() as system calls, and internally performs scatter/gather I/O”
+Meaning:
+
+When you call writev(fd, iov, 3) in your C program:
+
+Your program makes a system call to the kernel.
+The kernel knows the iov array and handles copying all buffers to the file efficiently in one operation.
+This is called scatter/gather I/O, because multiple memory segments (scatter) are gathered and written to one file in one atomic operation.
+Key point: The kernel is already optimized for this. You don’t need to loop over buffers yourself — it’s faster and safer.
+2️⃣ “In fact, all I/O inside the Linux kernel is vectored; read() and write() are implemented as vectored I/O with a vector of only one segment”
+
+Meaning:
+The normal read(fd, buf, n) and write(fd, buf, n) are actually special cases of readv/writev, where the vector has only 1 element.
+So:
+
+1️⃣ O_WRONLY
+Meaning: Open the file for writing only.
+2️⃣ O_CREAT
+Meaning: If the file does not exist, create it.
+
+3️⃣ O_TRUNC
+Meaning: If the file already exists, truncate it to length 0.
+
+1️⃣ What 0644 means
+Linux file permissions are expressed in octal numbers (0xxx).
+The 3 least significant digits represent owner, group, and others.
+0 6 4 4
+| | | |
+| | | +-- Others (everyone else) → 4 = read only
+| | +---- Group → 4 = read only
+| +------ Owner → 6 = read + write
++-------- Leading 0 = octal number
+
+2️⃣ Breaking it down
+6 → owner permissions → 4 + 2 = read + write
+4 → group permissions → read only
+4 → others → read only
+
+So the file permissions are:
+
+-rw-r--r--
+r = read
+w = write
+x = execute (not set here)
+
+Owner: read/write
+Group: read only
+Others: read only
+
+
+

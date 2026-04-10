@@ -1,0 +1,6 @@
+module ScatterLib {
+    header "scatter_lib.h"
+    link "scatter"
+    export *
+}
+

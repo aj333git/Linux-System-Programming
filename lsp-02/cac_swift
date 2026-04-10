@@ -1,0 +1,7 @@
+swiftc main.swift \
+  -I . \
+  -L . \
+  -lscatter \
+  -o main
+LD_LIBRARY_PATH=. ./main
+

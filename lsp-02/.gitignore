@@ -1,0 +1,16 @@
+# Shared libraries
+*.so
+*.dll
+*.dylib
+
+# Executables
+main
+app
+app2
+*.out
+
+# Build + temp
+build/
+*.log
+*.txt
+
